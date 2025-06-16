@@ -1,0 +1,8 @@
+[build]
+target = "bin/frontend/index.html"  # The index HTML file to drive the bundling process.
+dist = "html"                     # The output dir for all final assets.
+release = true                    # Build in release mode.
+minify = "always"                 # Control minification: can be one of: never, on_release, always
+
+[serve]
+target = "bin/frontend/index.html"   # The index HTML file to drive the bundling process.

@@ -1,0 +1,3 @@
+[workspace]
+members = ["bin/server", "bin/frontend"]
+resolver = "3"
