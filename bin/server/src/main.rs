@@ -8,23 +8,41 @@ use axum::{
     routing::get,
 };
 use futures_util::{SinkExt as _, StreamExt as _};
-use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
+use std::{collections::VecDeque, env, ffi::OsStr, net::SocketAddr, path::Path, sync::Arc};
 use tokio::{
     io::{AsyncBufReadExt as _, AsyncWriteExt as _},
     sync::{RwLock, broadcast, mpsc},
 };
 use tower_http::services::ServeDir;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 
 // Maximum number of messages to keep before removing oldest
 const MAX_MESSAGES: usize = 256;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    // Initialize logging with info level as default
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
 
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        println!("Usage: cargo r -r -- <target_executable> [target_args...]");
+        return;
+    }
+    let target_exe = Path::new(&args[1]);
+    if !target_exe.exists() {
+        println!();
+    }
+    let working_dir = target_exe.parent().unwrap();
+    let target_args = &args[2..];
     // Create our program handler
     let program_handler = Arc::new(
-        ProgramHandler::new("./adder.exe")
+        ProgramHandler::new(target_exe, working_dir, target_args)
             .await
             .expect("Failed to start program"),
     );
@@ -39,7 +57,10 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
-    tracing::info!("Server listening on {}", listener.local_addr().unwrap());
+    tracing::info!(
+        "Server listening on http://{}",
+        listener.local_addr().unwrap()
+    );
 
     axum::serve(
         listener,
@@ -120,8 +141,18 @@ struct ProgramHandler {
 }
 
 impl ProgramHandler {
-    async fn new(program_path: &str) -> std::io::Result<Self> {
+    async fn new<S, P>(
+        program_path: S,
+        working_dir_path: P,
+        args: &[String],
+    ) -> std::io::Result<Self>
+    where
+        S: AsRef<OsStr>,
+        P: AsRef<Path>,
+    {
         let mut program_handle = tokio::process::Command::new(program_path)
+            .current_dir(working_dir_path)
+            .args(args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .spawn()?;
