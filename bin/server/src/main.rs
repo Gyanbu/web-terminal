@@ -15,6 +15,9 @@ use tokio::{
 };
 use tower_http::services::ServeDir;
 
+// Maximum number of messages to keep before removing oldest
+const MAX_MESSAGES: usize = 256;
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -123,8 +126,8 @@ impl ProgramHandler {
             .stdout(std::process::Stdio::piped())
             .spawn()?;
 
-        let message_buf = Arc::new(RwLock::new(VecDeque::with_capacity(256)));
-        let (message_tx, _) = broadcast::channel(256);
+        let message_buf = Arc::new(RwLock::new(VecDeque::with_capacity(MAX_MESSAGES)));
+        let (message_tx, _) = broadcast::channel(MAX_MESSAGES);
 
         // Setup stdin writer
         let mut program_stdin = program_handle.stdin.take().unwrap();
@@ -163,7 +166,7 @@ impl ProgramHandler {
                         // Broadcast and store output
                         let _ = message_tx_clone2.send(trimmed.clone());
                         let mut message_buf = message_buf_clone2.write().await;
-                        if message_buf.len() >= 256 {
+                        if message_buf.len() >= MAX_MESSAGES {
                             message_buf.pop_front();
                         }
                         message_buf.push_back(trimmed);
@@ -198,7 +201,7 @@ impl ProgramHandler {
 
         // Store in history
         let mut message_buf = self.message_buf.write().await;
-        if message_buf.len() >= 256 {
+        if message_buf.len() >= MAX_MESSAGES {
             message_buf.pop_front();
         }
         message_buf.push_back(input);

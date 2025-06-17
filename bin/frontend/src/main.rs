@@ -16,7 +16,7 @@ use web_sys::{MessageEvent, WebSocket};
 // Maximum number of messages to keep before removing oldest
 const MAX_MESSAGES: usize = 256;
 
-const TITLE: &str = " Star Rail ";
+const TITLE: &str = " App ";
 
 fn main() -> io::Result<()> {
     // Shared state
