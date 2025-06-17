@@ -13,7 +13,9 @@ fn main() {
         .status()
         .is_err()
     {
-        println!("cargo:warning=Trunk not found - frontend won't be built");
+        println!(
+            "cargo:warning=Trunk not found - frontend won't be built install trunk with \"cargo install trunk\""
+        );
         return;
     }
 
