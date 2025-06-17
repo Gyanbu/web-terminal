@@ -67,12 +67,17 @@ fn main() -> io::Result<()> {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::LightCyan));
 
+        let mut area = f.area();
+        area.x += 1;
+        area.width -= 1;
+        // area.y += 1;
+        // area.height -= 1;
         // Render the outer block first
-        f.render_widget(outer_block, f.area());
+        f.render_widget(outer_block, area);
 
         // Calculate inner area (inside the border)
         let inner_area = {
-            let mut area = f.area();
+            let mut area = area;
             area.x += 1;
             area.y += 1;
             area.width = area.width.saturating_sub(2);
