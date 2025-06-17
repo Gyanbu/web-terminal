@@ -42,8 +42,6 @@ fn main() -> io::Result<()> {
                     if !msg.is_empty() {
                         if let Err(e) = ws.borrow().send_with_str(&msg) {
                             add_message(&messages, format!("Send error: {:?}", e));
-                        } else {
-                            add_message(&messages, format!("You: {}", msg));
                         }
                         input_buffer.borrow_mut().clear();
                     }
@@ -96,17 +94,16 @@ fn main() -> io::Result<()> {
 
         // Render messages in the upper area
         let msgs = messages.borrow();
-        let message_text = if msgs.is_empty() {
-            "Waiting for WebSocket messages...".to_string()
-        } else {
-            let rows = chunks[0].height as usize;
 
-            msgs.iter()
-                .skip(msgs.len().saturating_sub(rows))
-                .map(|s| s.as_str())
-                .collect::<Vec<&str>>()
-                .join("\n")
-        };
+        let rows = chunks[0].height as usize;
+
+        let message_text = msgs
+            .iter()
+            .skip(msgs.len().saturating_sub(rows))
+            .map(|s| s.as_str())
+            .collect::<Vec<&str>>()
+            .join("\n");
+
         f.render_widget(
             Paragraph::new(message_text).block(Block::default().borders(Borders::NONE)),
             chunks[0],
@@ -145,21 +142,20 @@ fn setup_websocket(messages: Rc<RefCell<VecDeque<String>>>) -> WebSocket {
     let ws = WebSocket::new("/ws").unwrap();
 
     // Send a test message
-    let ws_clone = ws.clone();
-    let onopen_callback = Closure::<dyn FnMut(MessageEvent)>::new(move |_e: MessageEvent| {
-        let _ = ws_clone.send_with_str("Connected!");
-    });
-    ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
+    // let ws_clone = ws.clone();
+    // let onopen_callback = Closure::<dyn FnMut(MessageEvent)>::new(move |_e: MessageEvent| {
+    //     let _ = ws_clone.send_with_str("Connected!");
+    // });
+    // ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
+    // onopen_callback.forget();
 
     let onmessage_callback = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
         if let Some(text) = e.data().as_string() {
-            add_message(&messages, format!("Server: {}", text));
+            add_message(&messages, text);
         }
     });
-
     ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
     onmessage_callback.forget();
-    onopen_callback.forget();
 
     ws
 }

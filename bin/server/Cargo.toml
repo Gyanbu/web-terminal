@@ -7,7 +7,7 @@ build = "build.rs"
 
 [dependencies]
 axum = { version = "0.8.4", features = ["ws"] }
-tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio = { version = "1", features = ["process", "rt-multi-thread", "sync"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 axum-extra = { version = "0.10.1", features = ["typed-header"] }
 headers = "0.4.1"

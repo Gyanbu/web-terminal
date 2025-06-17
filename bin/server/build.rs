@@ -1,6 +1,10 @@
 use std::process::{Command, Stdio};
 
 fn main() {
+    // Rebuild if frontend files change
+    println!("cargo:rerun-if-changed=../../Trunk.toml");
+    println!("cargo:rerun-if-changed=../../frontend/");
+
     // Check if Trunk is installed
     if Command::new("trunk")
         .arg("--version")
@@ -23,9 +27,4 @@ fn main() {
     if !status.success() {
         panic!("Trunk build failed");
     }
-
-    // Rebuild if frontend files change
-
-    println!("cargo:rerun-if-changed=../../Trunk.toml");
-    println!("cargo:rerun-if-changed=../../frontend/");
 }
