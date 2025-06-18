@@ -7,6 +7,7 @@ use ratzilla::ratatui::{
     Terminal,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Style},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph},
 };
 use ratzilla::{DomBackend, WebRenderer, event::KeyCode};
@@ -70,9 +71,6 @@ fn main() -> io::Result<()> {
         let mut area = f.area();
         area.x += 1;
         area.width -= 1;
-        // area.y += 1;
-        // area.height -= 1;
-        // Render the outer block first
         f.render_widget(outer_block, area);
 
         // Calculate inner area (inside the border)
@@ -99,18 +97,17 @@ fn main() -> io::Result<()> {
 
         // Render messages in the upper area
         let msgs = messages.borrow();
-
         let rows = chunks[0].height as usize;
 
-        let message_text = msgs
-            .iter()
-            .skip(msgs.len().saturating_sub(rows))
-            .map(|s| s.as_str())
-            .collect::<Vec<&str>>()
-            .join("\n");
+        // Create styled text from ANSI codes
+        let mut text = Text::default();
+        for msg in msgs.iter().skip(msgs.len().saturating_sub(rows)) {
+            let line = parse_ansi_to_line(msg);
+            text.lines.push(line);
+        }
 
         f.render_widget(
-            Paragraph::new(message_text).block(Block::default().borders(Borders::NONE)),
+            Paragraph::new(text).block(Block::default().borders(Borders::NONE)),
             chunks[0],
         );
 
@@ -132,6 +129,59 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
+// Parse ANSI color codes to Ratatui spans
+fn parse_ansi_to_line(input: &str) -> Line<'static> {
+    let mut spans = Vec::new();
+    let mut current_style = Style::default();
+    let mut buffer = String::new();
+
+    let mut chars = input.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Handle ANSI escape sequence
+            if chars.next() == Some('[') {
+                let mut code = String::new();
+                while let Some(&c) = chars.peek() {
+                    if c == 'm' {
+                        chars.next(); // consume 'm'
+                        break;
+                    }
+                    code.push(chars.next().unwrap());
+                }
+
+                // Push the buffered text with current style
+                if !buffer.is_empty() {
+                    spans.push(Span::styled(buffer.clone(), current_style));
+                    buffer.clear();
+                }
+
+                // Update style based on ANSI code
+                current_style = match code.as_str() {
+                    "31" => Style::default().fg(Color::Red),
+                    "32" => Style::default().fg(Color::Green),
+                    "33" => Style::default().fg(Color::Yellow),
+                    "34" => Style::default().fg(Color::Blue),
+                    "35" => Style::default().fg(Color::Magenta),
+                    "36" => Style::default().fg(Color::Cyan),
+                    "37" => Style::default().fg(Color::White),
+                    "39" => Style::default(), // reset
+                    "90" => Style::default().fg(Color::Gray),
+                    _ => current_style,
+                };
+            }
+        } else {
+            buffer.push(c);
+        }
+    }
+
+    // Push any remaining text
+    if !buffer.is_empty() {
+        spans.push(Span::styled(buffer, current_style));
+    }
+
+    Line::from(spans)
+}
+
 // Helper function to add messages with automatic pruning
 fn add_message(messages: &Rc<RefCell<VecDeque<String>>>, message: String) {
     let mut msgs = messages.borrow_mut();
@@ -145,14 +195,6 @@ fn add_message(messages: &Rc<RefCell<VecDeque<String>>>, message: String) {
 
 fn setup_websocket(messages: Rc<RefCell<VecDeque<String>>>) -> WebSocket {
     let ws = WebSocket::new("/ws").unwrap();
-
-    // Send a test message
-    // let ws_clone = ws.clone();
-    // let onopen_callback = Closure::<dyn FnMut(MessageEvent)>::new(move |_e: MessageEvent| {
-    //     let _ = ws_clone.send_with_str("Connected!");
-    // });
-    // ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
-    // onopen_callback.forget();
 
     let onmessage_callback = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
         if let Some(text) = e.data().as_string() {
