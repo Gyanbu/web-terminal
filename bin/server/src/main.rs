@@ -155,6 +155,7 @@ impl ProgramHandler {
             .args(args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
             .spawn()?;
 
         let message_buf = Arc::new(RwLock::new(VecDeque::with_capacity(MAX_MESSAGES)));
@@ -182,8 +183,8 @@ impl ProgramHandler {
         // Setup stdout reader
         let program_stdout = program_handle.stdout.take().unwrap();
         let mut program_out_reader = tokio::io::BufReader::new(program_stdout);
-        let message_tx_clone2 = message_tx.clone();
-        let message_buf_clone2 = Arc::clone(&message_buf);
+        let message_tx_clone = message_tx.clone();
+        let message_buf_clone = Arc::clone(&message_buf);
 
         tokio::spawn(async move {
             let mut buf = String::new();
@@ -195,8 +196,39 @@ impl ProgramHandler {
                         let trimmed = buf.trim().to_string();
 
                         // Broadcast and store output
-                        let _ = message_tx_clone2.send(trimmed.clone());
-                        let mut message_buf = message_buf_clone2.write().await;
+                        let _ = message_tx_clone.send(trimmed.clone());
+                        let mut message_buf = message_buf_clone.write().await;
+                        if message_buf.len() >= MAX_MESSAGES {
+                            message_buf.pop_front();
+                        }
+                        message_buf.push_back(trimmed);
+                    }
+                    Err(e) => {
+                        tracing::error!("Read error: {}", e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Setup stderr reader
+        let program_stderr = program_handle.stderr.take().unwrap();
+        let mut program_err_reader = tokio::io::BufReader::new(program_stderr);
+        let message_tx_clone = message_tx.clone();
+        let message_buf_clone = Arc::clone(&message_buf);
+
+        tokio::spawn(async move {
+            let mut buf = String::new();
+            loop {
+                buf.clear();
+                match program_err_reader.read_line(&mut buf).await {
+                    Ok(0) => break, // EOF
+                    Ok(_) => {
+                        let trimmed = buf.trim().to_string();
+
+                        // Broadcast and store output
+                        let _ = message_tx_clone.send(trimmed.clone());
+                        let mut message_buf = message_buf_clone.write().await;
                         if message_buf.len() >= MAX_MESSAGES {
                             message_buf.pop_front();
                         }
